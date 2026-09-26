@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  githubId       String          @unique
+  username       String
+  avatarUrl      String?
+  connectedRepos ConnectedRepo[]
+  createdAt      DateTime        @default(now())
+}
+
+model ConnectedRepo {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  githubRepoId Int           @unique
+  fullName     String        // e.g. "octocat/hello-world"
+  webhookId    Int?          // GitHub's webhook ID once we create it in a later piece
+  githubEvents GithubEvent[]
+  createdAt    DateTime      @default(now())
+}
+
+model GithubEvent {
+  id              String        @id @default(cuid())
+  connectedRepoId String
+  connectedRepo   ConnectedRepo @relation(fields: [connectedRepoId], references: [id])
+  deliveryId      String        @unique
+  eventType       String
+  action          String?
+  payload         Json
+  receivedAt      DateTime      @default(now())
+  status          String        @default("received")
+  processedAt     DateTime?
+  error           String?
+}

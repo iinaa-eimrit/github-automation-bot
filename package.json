@@ -9,8 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "@prisma/client": "6.4.1",
     "next": "16.3.6",
     "next-auth": "^5.0.0-beta.32",
+    "prisma": "6.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -21,6 +24,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "smee-client": "^5.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
