@@ -126,7 +126,12 @@ export async function enableWebhook(connectedRepoId: string) {
     throw new Error("Invalid repository name format.");
   }
 
-  const webhookId = await createRepoWebhook(session.accessToken, owner, repo);
+  const webhookId = await createRepoWebhook(
+    session.accessToken,
+    owner,
+    repo,
+    connectedRepo.webhookId
+  );
 
   const updated = await db.connectedRepo.update({
     where: { id: connectedRepo.id },
