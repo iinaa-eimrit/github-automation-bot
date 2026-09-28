@@ -6,6 +6,22 @@ export function getOctokit(accessToken: string) {
   });
 }
 
+export async function addLabelToIssue(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  label: string
+): Promise<void> {
+  const octokit = getOctokit(accessToken);
+  await octokit.rest.issues.addLabels({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    labels: [label],
+  });
+}
+
 export function getResolvedWebhookUrl(): string {
   const rawUrl = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
   if (!rawUrl) {

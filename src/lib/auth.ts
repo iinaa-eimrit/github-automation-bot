@@ -40,11 +40,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           update: {
             username,
             avatarUrl,
+            accessToken: account.access_token,
           },
           create: {
             githubId,
             username,
             avatarUrl,
+            accessToken: account.access_token,
           },
         });
       }

@@ -15,6 +15,7 @@ model User {
   githubId       String          @unique
   username       String
   avatarUrl      String?
+  accessToken    String?
   connectedRepos ConnectedRepo[]
   createdAt      DateTime        @default(now())
 }
@@ -42,4 +43,16 @@ model GithubEvent {
   status          String        @default("received")
   processedAt     DateTime?
   error           String?
+  botActions      BotAction[]
+}
+
+model BotAction {
+  id            String      @id @default(cuid())
+  githubEventId String
+  githubEvent   GithubEvent @relation(fields: [githubEventId], references: [id])
+  type          String      // "add_label" | "slack_notify"
+  detail        Json
+  success       Boolean
+  error         String?
+  createdAt     DateTime    @default(now())
 }

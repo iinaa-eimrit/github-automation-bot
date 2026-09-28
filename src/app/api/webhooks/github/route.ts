@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
+import { processEvent } from "@/lib/process-event";
 
 export async function POST(req: NextRequest) {
   try {
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
 
     const connectedRepo = await db.connectedRepo.findUnique({
       where: { githubRepoId: Number(githubRepoId) },
+      include: { user: { select: { accessToken: true } } },
     });
 
     if (!connectedRepo) {
@@ -123,13 +125,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await processEvent(githubEvent, connectedRepo);
+
+    const finalEvent = await db.githubEvent.findUnique({
+      where: { id: githubEvent.id },
+      select: { status: true },
+    });
+
     // 7. Return 200 OK
     return NextResponse.json(
       {
         success: true,
         eventId: githubEvent.id,
         deliveryId: githubEvent.deliveryId,
-        status: githubEvent.status,
+        status: finalEvent?.status ?? githubEvent.status,
       },
       { status: 200 }
     );
