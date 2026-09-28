@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "BotAction" ADD COLUMN "attempts" INTEGER NOT NULL DEFAULT 1;

@@ -24,6 +24,7 @@ export interface EventLogEntry {
     type: string;
     detail: unknown;
     success: boolean;
+    attempts: number;
     error: string | null;
     createdAt: string;
   }>;
@@ -63,6 +64,7 @@ export async function getEventLog(): Promise<EventLogEntry[]> {
       type: botAction.type,
       detail: botAction.detail,
       success: botAction.success,
+      attempts: botAction.attempts,
       error: botAction.error,
       createdAt: botAction.createdAt.toISOString(),
     })),

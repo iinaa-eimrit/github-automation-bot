@@ -1,12 +1,21 @@
 import type { ConnectedRepo, GithubEvent } from "@prisma/client";
 import { db } from "@/lib/db";
-import { addLabelToIssue } from "@/lib/github";
+import { addLabelToIssue, isRetryableGitHubError } from "@/lib/github";
+import { log } from "@/lib/logger";
 import { matchRules, type MatchedAction } from "@/lib/rules";
-import { sendSlackNotification } from "@/lib/slack";
+import {
+  isRetryableSlackError,
+  sendSlackNotification,
+} from "@/lib/slack";
+import { withRetry } from "@/lib/retry";
 
 type EventPayload = {
   issue?: { number?: unknown; title?: unknown; html_url?: unknown };
 };
+
+class PermanentActionError extends Error {
+  readonly status = 400;
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -30,24 +39,64 @@ export async function processEvent(
   for (const action of actions) {
     let success = false;
     let error: string | undefined;
+    let attempts = 0;
+    const startedAt = Date.now();
+    const isRetryable = action.type === "add_label"
+      ? isRetryableGitHubError
+      : isRetryableSlackError;
     try {
-      await executeAction(action, payload, connectedRepo);
+      await withRetry(
+        async () => {
+          attempts += 1;
+          await executeAction(action, payload, connectedRepo);
+        },
+        { maxAttempts: 3, isRetryable }
+      );
       success = true;
+      log("info", "Webhook action completed", {
+        eventId: event.id,
+        deliveryId: event.deliveryId,
+        repo: connectedRepo.fullName,
+        action: action.type,
+        attempts,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (err) {
       error = errorMessage(err);
-      console.error(`GitHub event action ${action.type} failed:`, error);
+      log("error", "Webhook action failed", {
+        eventId: event.id,
+        deliveryId: event.deliveryId,
+        repo: connectedRepo.fullName,
+        action: action.type,
+        attempts,
+        durationMs: Date.now() - startedAt,
+        error,
+      });
     }
 
-    await db.botAction.create({
-      data: {
-        githubEventId: event.id,
-        type: action.type,
-        detail: action as object,
-        success,
-        error,
-      },
-    });
-    outcomes.push(success);
+    let recorded = false;
+    try {
+      await db.botAction.create({
+        data: {
+          githubEventId: event.id,
+          type: action.type,
+          detail: action as object,
+          success,
+          attempts,
+          error,
+        },
+      });
+      recorded = true;
+    } catch (recordError) {
+      log("error", "Could not save webhook action result", {
+        eventId: event.id,
+        deliveryId: event.deliveryId,
+        action: action.type,
+        attempts,
+        error: errorMessage(recordError),
+      });
+    }
+    outcomes.push(success && recorded);
   }
 
   await db.githubEvent.update({
@@ -67,14 +116,14 @@ async function executeAction(
   if (action.type === "add_label") {
     const issueNumber = payload.issue?.number;
     if (!Number.isInteger(issueNumber)) {
-      throw new Error("Issue number is missing or invalid in the webhook payload.");
+      throw new PermanentActionError("Issue number is missing or invalid in the webhook payload.");
     }
     const accessToken = connectedRepo.user.accessToken;
     if (!accessToken) {
-      throw new Error("Connected user's GitHub access token is missing. Sign in again.");
+      throw new PermanentActionError("Connected user's GitHub access token is missing. Sign in again.");
     }
     const [owner, repo] = connectedRepo.fullName.split("/");
-    if (!owner || !repo) throw new Error("Connected repository name is invalid.");
+    if (!owner || !repo) throw new PermanentActionError("Connected repository name is invalid.");
     await addLabelToIssue(accessToken, owner, repo, issueNumber as number, action.label);
     return;
   }

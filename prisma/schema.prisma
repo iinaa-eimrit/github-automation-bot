@@ -53,6 +53,7 @@ model BotAction {
   type          String      // "add_label" | "slack_notify"
   detail        Json
   success       Boolean
+  attempts      Int         @default(1)
   error         String?
   createdAt     DateTime    @default(now())
 }

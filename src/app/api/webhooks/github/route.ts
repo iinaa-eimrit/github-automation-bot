@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
+import { log } from "@/lib/logger";
 import { processEvent } from "@/lib/process-event";
 
 export async function POST(req: NextRequest) {
+  const deliveryId = req.headers.get("x-github-delivery");
+  const eventType = req.headers.get("x-github-event");
+  log("info", "GitHub webhook request received", { deliveryId, eventType });
+
   try {
     // 1. Read raw body as text for exact byte signature verification
     const rawBody = await req.text();
 
     const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
     if (!webhookSecret) {
-      console.error("GITHUB_WEBHOOK_SECRET is not configured.");
+      log("error", "GitHub webhook secret is not configured", { deliveryId, eventType });
       return NextResponse.json(
         { error: "Server misconfiguration: Webhook secret missing" },
         { status: 500 }
@@ -44,7 +49,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Read X-GitHub-Event header; handle ping event immediately
-    const eventType = req.headers.get("x-github-event");
     if (eventType === "ping") {
       return NextResponse.json(
         { message: "Ping received successfully" },
@@ -53,7 +57,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Read X-GitHub-Delivery header as idempotency key
-    const deliveryId = req.headers.get("x-github-delivery");
     if (!deliveryId) {
       return NextResponse.json(
         { error: "Missing x-github-delivery header" },
@@ -114,23 +117,45 @@ export async function POST(req: NextRequest) {
     // 6. Insert GithubEvent row with received status
     const action = typeof payload.action === "string" ? payload.action : null;
 
-    const githubEvent = await db.githubEvent.create({
-      data: {
-        connectedRepoId: connectedRepo.id,
+    let githubEvent;
+    try {
+      githubEvent = await db.githubEvent.create({
+        data: {
+          connectedRepoId: connectedRepo.id,
+          deliveryId,
+          eventType: eventType || "unknown",
+          action,
+          payload: payload as object,
+          status: "received",
+        },
+      });
+    } catch (error) {
+      log("error", "Could not store GitHub webhook event", {
         deliveryId,
-        eventType: eventType || "unknown",
-        action,
-        payload: payload as object,
-        status: "received",
-      },
-    });
+        eventType,
+        repo: connectedRepo.fullName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return new Response("internal error", { status: 500 });
+    }
 
-    await processEvent(githubEvent, connectedRepo);
-
-    const finalEvent = await db.githubEvent.findUnique({
-      where: { id: githubEvent.id },
-      select: { status: true },
-    });
+    let finalStatus = githubEvent.status;
+    try {
+      await processEvent(githubEvent, connectedRepo);
+      const finalEvent = await db.githubEvent.findUnique({
+        where: { id: githubEvent.id },
+        select: { status: true },
+      });
+      finalStatus = finalEvent?.status ?? finalStatus;
+    } catch (error) {
+      log("error", "GitHub event was stored but processing failed", {
+        eventId: githubEvent.id,
+        deliveryId,
+        eventType,
+        repo: connectedRepo.fullName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // 7. Return 200 OK
     return NextResponse.json(
@@ -138,15 +163,16 @@ export async function POST(req: NextRequest) {
         success: true,
         eventId: githubEvent.id,
         deliveryId: githubEvent.deliveryId,
-        status: finalEvent?.status ?? githubEvent.status,
+        status: finalStatus,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Unhandled error processing GitHub webhook:", error);
-    return NextResponse.json(
-      { error: "Internal server error processing webhook" },
-      { status: 500 }
-    );
+    log("error", "GitHub webhook request failed before event storage", {
+      deliveryId,
+      eventType,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new Response("internal error", { status: 500 });
   }
 }

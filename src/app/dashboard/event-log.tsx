@@ -133,7 +133,11 @@ export function EventLog({ initialEvents }: EventLogProps) {
                                   <span className={botAction.success ? "text-emerald-300" : "text-red-300"}>
                                     {botAction.success ? "Success" : "Failed"}
                                   </span>
-                                  <span className="text-slate-200">{botAction.type}</span>
+                                  <span className="text-slate-200">
+                                    {botAction.type}{botAction.success
+                                      ? ` — succeeded after ${botAction.attempts} ${botAction.attempts === 1 ? "attempt" : "attempts"}`
+                                      : ` — failed after ${botAction.attempts} ${botAction.attempts === 1 ? "attempt" : "attempts"}`}
+                                  </span>
                                   {botAction.error && <span className="text-red-300">{botAction.error}</span>}
                                 </li>
                               ))}

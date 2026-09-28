@@ -1,4 +1,11 @@
 import { Octokit } from "@octokit/rest";
+import { log } from "@/lib/logger";
+
+export function isRetryableGitHubError(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status !== "number") return true;
+  return status === 429 || status >= 500;
+}
 
 export function getOctokit(accessToken: string) {
   return new Octokit({
@@ -22,17 +29,12 @@ export async function addLabelToIssue(
   });
 }
 
-export function getResolvedWebhookUrl(): string {
-  const rawUrl = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
-  if (!rawUrl) {
-    throw new Error("PUBLIC_APP_URL is not set in environment variables.");
+export function getWebhookUrl(): string {
+  const webhookUrl = process.env.GITHUB_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    throw new Error("GITHUB_WEBHOOK_URL is not set in environment variables.");
   }
-
-  // Smee.io channels only receive events at the exact channel URL (e.g. https://smee.io/xyz).
-  // Standard deployment URLs (e.g. Vercel, ngrok) forward to the API route at /api/webhooks/github.
-  return rawUrl.includes("smee.io")
-    ? rawUrl
-    : `${rawUrl}/api/webhooks/github`;
+  return webhookUrl;
 }
 
 export async function createRepoWebhook(
@@ -42,7 +44,7 @@ export async function createRepoWebhook(
   existingWebhookId?: number | null
 ): Promise<number> {
   const octokit = getOctokit(accessToken);
-  const webhookUrl = getResolvedWebhookUrl();
+  const webhookUrl = getWebhookUrl();
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
@@ -66,7 +68,11 @@ export async function createRepoWebhook(
       });
       return data.id;
     } catch (err) {
-      console.warn("Could not update existing webhook, creating new one:", err);
+      log("warn", "Could not update existing GitHub webhook; creating a new one", {
+        owner,
+        repo,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
