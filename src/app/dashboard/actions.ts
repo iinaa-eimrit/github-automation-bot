@@ -11,6 +11,64 @@ export interface ConnectableRepo {
   private: boolean;
 }
 
+export interface EventLogEntry {
+  id: string;
+  receivedAt: string;
+  eventType: string;
+  action: string | null;
+  status: string;
+  payload: unknown;
+  connectedRepo: { fullName: string };
+  botActions: Array<{
+    id: string;
+    type: string;
+    detail: unknown;
+    success: boolean;
+    error: string | null;
+    createdAt: string;
+  }>;
+}
+
+export async function getEventLog(): Promise<EventLogEntry[]> {
+  const session = await auth();
+  const githubId = session?.user?.githubId;
+  if (!githubId) return [];
+
+  const user = await db.user.findUnique({
+    where: { githubId },
+    select: { id: true },
+  });
+  if (!user) return [];
+
+  const events = await db.githubEvent.findMany({
+    where: { connectedRepo: { userId: user.id } },
+    orderBy: { receivedAt: "desc" },
+    take: 50,
+    include: {
+      connectedRepo: { select: { fullName: true } },
+      botActions: { orderBy: { createdAt: "asc" } },
+    },
+  });
+
+  return events.map((event) => ({
+    id: event.id,
+    receivedAt: event.receivedAt.toISOString(),
+    eventType: event.eventType,
+    action: event.action,
+    status: event.status,
+    payload: event.payload,
+    connectedRepo: event.connectedRepo,
+    botActions: event.botActions.map((botAction) => ({
+      id: botAction.id,
+      type: botAction.type,
+      detail: botAction.detail,
+      success: botAction.success,
+      error: botAction.error,
+      createdAt: botAction.createdAt.toISOString(),
+    })),
+  }));
+}
+
 export async function getConnectableRepos(): Promise<ConnectableRepo[]> {
   const session = await auth();
 

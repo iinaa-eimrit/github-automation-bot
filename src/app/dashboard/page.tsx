@@ -2,8 +2,9 @@ import { auth, signOut } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getConnectableRepos } from "./actions";
+import { getConnectableRepos, getEventLog } from "./actions";
 import { RepoList } from "./repo-list";
+import { EventLog } from "./event-log";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -27,6 +28,7 @@ export default async function DashboardPage() {
   }
 
   const connectedRepos = dbUser?.connectedRepos || [];
+  const initialEvents = dbUser ? await getEventLog() : [];
   const activeWebhooksCount = connectedRepos.filter((r) => r.webhookId !== null).length;
 
   let connectableRepos: Array<{ id: number; full_name: string; private: boolean }> = [];
@@ -102,9 +104,9 @@ export default async function DashboardPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Piece 4 Active
+              Piece 6 Active
             </span>
-            <span className="text-xs text-slate-400">Webhook Endpoint &amp; Signature Verification</span>
+            <span className="text-xs text-slate-400">Live Event &amp; Action Log</span>
           </div>
           <Link
             href="/"
@@ -162,6 +164,8 @@ export default async function DashboardPage() {
             initialConnectedRepos={initialConnectedRepos}
           />
         </div>
+
+        <EventLog initialEvents={initialEvents} />
       </main>
     </div>
   );
