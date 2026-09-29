@@ -18,4 +18,4 @@ The AI initially made the webhook URL helper inspect whether `PUBLIC_APP_URL` co
 
 ## What I would improve next
 
-I would move event processing to a durable job/outbox worker so an app restart after an event is stored cannot leave it in `received` without another processing attempt. I would migrate OAuth credentials to GitHub App installation tokens, add editable rule configuration, and deploy the app to a public host with production OAuth, database, webhook, and Slack settings. The repository is deployment-ready in configuration and documentation, but it does not yet have a production URL.
+I would move event processing to a durable job/outbox worker so an app restart after an event is stored cannot leave it in `received` without another processing attempt. I would migrate OAuth credentials to GitHub App installation tokens, add editable rule configuration, and run the documented transient-failure and redelivery checks against the production integrations. The app is deployed at https://github-automation-bot-rho.vercel.app/.

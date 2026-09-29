@@ -97,7 +97,7 @@ For production:
 4. Run `npx prisma migrate deploy` against the production `DATABASE_URL`.
 5. Deploy, sign in, connect a repository, and enable its webhook. Confirm a test issue reaches the app and Slack.
 
-**Production URL:** not deployed yet. Add the public URL here after deployment and verify it is reachable.
+**Production URL:** [https://github-automation-bot-rho.vercel.app/](https://github-automation-bot-rho.vercel.app/) (verified reachable with HTTP 200).
 
 ## Project instructions
 
